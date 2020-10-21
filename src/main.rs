@@ -4,7 +4,7 @@ use std::net::TcpStream;
 use nix::unistd::{fork, ForkResult};
 
 fn main(){
-    const CLIENT_NUMBER:i32 = 10000;
+    const CLIENT_NUMBER:i32 = 1000;
 
     'main_loop: for it in 0..CLIENT_NUMBER {
         while let Ok(ForkResult::Parent{ child: _, .. }) = fork() {
