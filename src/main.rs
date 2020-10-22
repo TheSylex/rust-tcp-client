@@ -4,11 +4,10 @@ use std::net::TcpStream;
 use nix::unistd::{fork, ForkResult};
 
 fn main(){
-    const CLIENT_NUMBER:i32 = 1000;
+    const CLIENT_NUMBER:i32 = 750;
 
-    'main_loop: for it in 0..CLIENT_NUMBER {
+    'main_loop: for _ in 0..CLIENT_NUMBER {
         while let Ok(ForkResult::Parent{ child: _, .. }) = fork() {
-            println!("Fork number: {}", it);
             client();
             break 'main_loop;
         }
@@ -34,12 +33,14 @@ fn client() {
             id = val.0;
             group_size = val.1.2;
 
+            println!("Client {} connected,\nAwaiting for simulation to begin.", id);
+
             //Simulation phase
             while simulation_running {
                 let instant = Instant::now();
                 
                 //Send coordinates
-                buffer = data_to_bytes( &(id, (42,555,32)) );
+                buffer = data_to_bytes( &(id, (111,222,333)) );
                 while !stream.write(&buffer).is_ok() {};
 
                 //Receive coordinates
