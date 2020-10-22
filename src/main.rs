@@ -1,82 +1,87 @@
-use std::{io::prelude::*, time::Instant};
+use std::{io::prelude::*, time::{Duration, Instant}};
 use std::net::TcpStream;
 
-use nix::unistd::{fork, ForkResult};
+use std::thread;
+
+const CONN_TIMEOUT: u64 = 1;
 
 fn main(){
-    const CLIENT_NUMBER:i32 = 750;
-
+    const CLIENT_NUMBER:i32 = 7500;
+	
+	
+	/*
     'main_loop: for _ in 0..CLIENT_NUMBER {
         while let Ok(ForkResult::Parent{ child: _, .. }) = fork() {
             client();
             break 'main_loop;
         }
+    }*/
+
+    let mut handles = vec![];
+
+    for _ in 0..CLIENT_NUMBER {
+        let handle = thread::spawn(||client());
+        handles.push(handle);
+    }
+
+    for handle in handles {
+        handle.join().unwrap();
     }
 }
 
 fn client() {
     let group_size: i16;
-    let mut simulation_running;
     let id: i32;
     let mut response_time: u128 = 0;
+    let simulation_cycles: i16;
 
-
-    match TcpStream::connect("127.0.0.1:8080"){
-        Ok(mut stream) => {
-
-            //Init phase
-            simulation_running = true;
-            let mut buffer = [0 as u8; 10];
-            
-            while !stream.read(&mut buffer).is_ok(){};
-            let val = bytes_to_data(&buffer);
-            id = val.0;
-            group_size = val.1.2;
-
-            println!("Client {} connected,\nAwaiting for simulation to begin.", id);
-
-            //Simulation phase
-            while simulation_running {
-                let instant = Instant::now();
+    loop{
+        match TcpStream::connect("127.0.0.1:8080"){
+            Ok(mut stream) => {
+    
+                //Init phase
+                let mut buffer = [0 as u8; 10];
+                stream.set_nodelay(true).unwrap();
+                stream.set_read_timeout(Some(Duration::new(CONN_TIMEOUT, 0))).unwrap();
+                //println!("Client connected through port: {},\nAwaiting for simulation to begin.", stream.local_addr().unwrap().port());
                 
-                //Send coordinates
-                buffer = data_to_bytes( &(id, (111,222,333)) );
-                while !stream.write(&buffer).is_ok() {};
-
-                //Receive coordinates
-                for _ in 0..group_size {
-                    while !stream.read(&mut buffer).is_ok() {};
-
-                    let value = bytes_to_data(&buffer);
-                    if true {
-                        println!(
-                            "Data received by {} =>ID:{} x:{} y:{} z:{}",
-                            id,
-                            value.0,
-                            value.1.0,
-                            value.1.1,
-                            value.1.2
-                        );
+                while !stream.read(&mut buffer).is_ok(){};
+                let val = bytes_to_data(&buffer);
+                id = val.0;
+                simulation_cycles = val.1.0;
+                group_size = val.1.2;
+                
+    
+                //Simulation phase
+                for _ in 0..simulation_cycles {
+                    let instant = Instant::now();
+                    
+                    //Send coordinates
+                    buffer = data_to_bytes( &(id, (111,222,333)) );
+                    while !stream.write(&buffer).is_ok(){}
+    
+                    //Receive coordinates
+                    for _ in 0..group_size {
+                        while !stream.read(&mut buffer).is_ok(){}
+                        let value = bytes_to_data(&buffer);
+                        //println!("Data received by {} =>ID:{} x:{} y:{} z:{}",id,value.0,value.1.0,value.1.1,value.1.2);
                     }
+    
+                    response_time = (instant.elapsed().as_millis() + response_time) / 2;
                 }
-
-                //Check if simulation ends (When a clients sends an ID equal to -1)
-                while !stream.read(&mut buffer).is_ok() {};
-                if bytes_to_data(&buffer).0 == -1 {
-                    simulation_running = false;
-                }
-
-                response_time = (instant.elapsed().as_millis() + response_time) / 2;
+                
+                //Closing phase
+                buffer = time_to_bytes(response_time);
+                while !stream.write(& buffer).is_ok() {};
+                //print!("\nSimulation ended for client: {}, response time: {}", id, response_time);
+                break;
+            },
+            Err(e) => {
+                println!("Couldn't connect, closing...\n{}", e);
+                std::process::exit(0);
             }
-            
-            //Closing phase
-            buffer = time_to_bytes(response_time);
-            while !stream.write(& buffer).is_ok() {};
-            println!("Simulation ended for client: {}", id);
-
-        },
-        Err(_) => println!("Couldn't connect, closing...")
-    };
+        };
+    }
 }
 
 fn time_to_bytes(value: u128) -> [u8; 10]{
