@@ -6,7 +6,7 @@ use std::thread;
 const CONN_TIMEOUT: u64 = 1;
 
 fn main(){
-    const CLIENT_NUMBER:i32 = 7500;
+    const CLIENT_NUMBER:i32 = 60000;
 	
 	
 	/*
@@ -32,7 +32,7 @@ fn main(){
 fn client() {
     let group_size: i16;
     let id: i32;
-    let mut response_time: u128 = 0;
+    let mut avg_response_time: Vec<u128> = vec![];
     let simulation_cycles: i16;
 
     loop{
@@ -67,17 +67,17 @@ fn client() {
                         //println!("Data received by {} =>ID:{} x:{} y:{} z:{}",id,value.0,value.1.0,value.1.1,value.1.2);
                     }
     
-                    response_time = (instant.elapsed().as_millis() + response_time) / 2;
+                    avg_response_time.push(instant.elapsed().as_millis());
                 }
                 
                 //Closing phase
-                buffer = time_to_bytes(response_time);
+                buffer = time_to_bytes(average(&avg_response_time));
                 while !stream.write(& buffer).is_ok() {};
                 //print!("\nSimulation ended for client: {}, response time: {}", id, response_time);
                 break;
             },
             Err(e) => {
-                println!("Couldn't connect, closing...\n{}", e);
+                //println!("Couldn't connect, closing...\n{}", e);
                 std::process::exit(0);
             }
         };
@@ -120,6 +120,10 @@ fn data_to_bytes(value: &(i32,(i16,i16,i16))) -> [u8; 10]{
     buffer[8..].copy_from_slice(&value.1.2.to_le_bytes());
 
     buffer
+}
+
+fn average(values: &Vec<u128>) -> u128 {
+    values.iter().sum::<u128>() as u128 / values.len() as u128
 }
 
 /*
