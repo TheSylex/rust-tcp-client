@@ -1,5 +1,6 @@
 use std::{io::prelude::*, time::{Duration, Instant}};
 use std::net::TcpStream;
+use rand::{thread_rng, Rng};
 
 use std::thread;
 
@@ -8,6 +9,8 @@ const CONN_TIMEOUT: u64 = 1;
 fn main(){
     const CLIENT_NUMBER:i32 = 60000;
 	
+	print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
+	println!("Trying to connect all clients...");
 	
 	/*
     'main_loop: for _ in 0..CLIENT_NUMBER {
@@ -23,10 +26,15 @@ fn main(){
         let handle = thread::spawn(||client());
         handles.push(handle);
     }
-
+	
+	println!("All clients connected.");
+	println!("\n...\n");
+	
     for handle in handles {
         handle.join().unwrap();
     }
+	
+	//println!("\nAll clients finished, closing.");
 }
 
 fn client() {
@@ -57,23 +65,24 @@ fn client() {
                     let instant = Instant::now();
                     
                     //Send coordinates
-                    buffer = data_to_bytes( &(id, (111,222,333)) );
+                    buffer = data_to_bytes( &(id, (thread_rng().gen(),thread_rng().gen(),thread_rng().gen())) );
                     while !stream.write(&buffer).is_ok(){}
     
                     //Receive coordinates
                     for _ in 0..group_size {
                         while !stream.read(&mut buffer).is_ok(){}
                         let value = bytes_to_data(&buffer);
-                        //println!("Data received by {} =>ID:{} x:{} y:{} z:{}",id,value.0,value.1.0,value.1.1,value.1.2);
+                        println!("Data received by {} =>ID:{} x:{} y:{} z:{}",id,value.0,value.1.0,value.1.1,value.1.2);
                     }
     
                     avg_response_time.push(instant.elapsed().as_millis());
                 }
                 
                 //Closing phase
-                buffer = time_to_bytes(average(&avg_response_time));
+				let response_time = average(&avg_response_time);
+                buffer = time_to_bytes(response_time);
                 while !stream.write(& buffer).is_ok() {};
-                //print!("\nSimulation ended for client: {}, response time: {}", id, response_time);
+                //print!("\nSimulation ended for client: {}, response time: {}s", id, response_time as f64 / 1000.0);
                 break;
             },
             Err(e) => {
@@ -125,66 +134,3 @@ fn data_to_bytes(value: &(i32,(i16,i16,i16))) -> [u8; 10]{
 fn average(values: &Vec<u128>) -> u128 {
     values.iter().sum::<u128>() as u128 / values.len() as u128
 }
-
-/*
-use std::{io::prelude::*, time::Duration};
-use std::net::TcpStream;
-use std::thread;
-
-const GROUP_NUMBER: u32 = 20;
-const GROUP_SIZE: usize = 20;
-fn main() {
-    let mut stream_group: Vec<TcpStream> = Vec::new();
-
-    let mut connection_count = 0;
-
-    let mut handles = vec![];
-    for group_counter in 0..GROUP_NUMBER {
-        for _ in 0..GROUP_SIZE {
-            stream_group.push(TcpStream::connect("127.0.0.1:8080").unwrap());
-            thread::sleep(Duration::from_millis(1)); 
-        }
-        let handle = thread::spawn(move || handle_group_client_connection(stream_group, group_counter));
-        handles.push(handle);
-        stream_group = Vec::new();
-    }
-
-    for handle in handles {
-        handle.join().unwrap();
-    }
-}
-
-fn handle_group_client_connection(stream_group: Vec<TcpStream>, group_id:u32){
-    let mut buffer = [0 as u8; 10];
-
-    for stream in &stream_group{
-        //stream.set_nonblocking(true).expect("Couldnt set nonblocking");
-    }
-
-    println!("Group {}.", group_id);
-    loop {
-        for mut stream in &stream_group{
-            stream.set_nonblocking(true).expect("Couldnt set nonblocking");
-
-            let value:(i16,i16,i16,u32)=(42,555,32, group_id);
-
-            buffer = data_to_bytes(&value);
-
-            stream.write(&buffer).expect("COULDNT WRITE");
-        }
-
-        for mut stream in &stream_group{
-            stream.set_nonblocking(true).expect("Couldnt set nonblocking");
-            match stream.read(&mut buffer){
-                Ok(buffersize) => {
-                    let value = bytes_to_data(&buffer);
-                    println!("x:{} y:{} z:{} ID:{}", value.0, value.1, value.2, value.3);
-                },
-                Err(_error) => {}
-            }
-
-        }
-        thread::sleep(Duration::from_millis(10));
-    }
-}
-*/
